@@ -6,7 +6,7 @@ export class BeatDetector {
     this.prevFreqData = new Uint8Array(binCount);
     this.history = [];
     this.lastBeatTime = -Infinity;
-    this.cooldown = 160; // 160ms cooldown window
+    this.cooldown = 240; // 240ms window locks onto musical beats without rapid stutter
     this.flux = 0;
     this.threshold = 0;
   }
@@ -26,11 +26,11 @@ export class BeatDetector {
     }
     this.flux = flux;
 
-    // Rolling history dynamic mean threshold
+    // Rolling history dynamic mean threshold with noise floor
     const mean = this.history.length > 0
       ? this.history.reduce((sum, val) => sum + val, 0) / this.history.length
       : 0;
-    const threshold = mean * 1.35;
+    const threshold = Math.max(mean * 1.45, 18);
     this.threshold = threshold;
 
     const now = typeof time === 'number'

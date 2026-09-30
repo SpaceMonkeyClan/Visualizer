@@ -33,6 +33,7 @@ const geometry = new THREE.IcosahedronGeometry(baseRadius, 5);
 
 // --- Audio DataTexture & ShaderMaterial ---
 const audioData = new Uint8Array(256);
+const smoothAudioData = new Float32Array(256);
 const u_audioTexture = new THREE.DataTexture(
   audioData,
   256,
@@ -40,6 +41,9 @@ const u_audioTexture = new THREE.DataTexture(
   THREE.LuminanceFormat,
   THREE.UnsignedByteType
 );
+u_audioTexture.minFilter = THREE.LinearFilter;
+u_audioTexture.magFilter = THREE.LinearFilter;
+u_audioTexture.generateMipmaps = false;
 u_audioTexture.needsUpdate = true;
 
 const outerMaterial = new THREE.ShaderMaterial({
@@ -61,13 +65,13 @@ const outerMaterial = new THREE.ShaderMaterial({
     void main() {
       vUv = uv;
 
-      // Sample u_audioTexture along uv.x
+      // Sample u_audioTexture along uv.x with smooth linear interpolation
       float audioVal = texture2D(u_audioTexture, vec2(uv.x, 0.5)).r;
       vAudio = audioVal;
 
-      // Subtle sine wave driven by u_time and u_bass
-      float wave = sin(position.x * 2.0 + u_time * 3.0) * cos(position.y * 2.0 + u_time * 2.0);
-      float displacement = (audioVal * 0.75) + (wave * 0.15 * (1.0 + u_bass * 1.5)) + (u_bass * 0.25);
+      // Soft, organic harmonic wave
+      float wave = sin(position.x * 1.5 + u_time * 1.2) * cos(position.y * 1.5 + u_time * 0.9);
+      float displacement = (audioVal * 0.55) + (wave * 0.12 * (1.0 + u_bass * 1.2)) + (u_bass * 0.2);
 
       vec3 displaced = position + normal * displacement;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
@@ -81,9 +85,9 @@ const outerMaterial = new THREE.ShaderMaterial({
     varying float vAudio;
 
     void main() {
-      // Wireframe illuminated edges with audio-driven brightness
-      vec3 illuminated = u_baseColor * 3.5 + vec3(0.08, 0.12, 0.22);
-      float brightness = 1.0 + (vAudio * 3.0) + (u_bass * 2.0);
+      // Wireframe illuminated edges with restrained, elegant brightness
+      vec3 illuminated = u_baseColor * 2.8 + vec3(0.06, 0.1, 0.18);
+      float brightness = 1.0 + (vAudio * 1.4) + (u_bass * 0.9);
       gl_FragColor = vec4(illuminated * brightness, 1.0);
     }
   `,
@@ -138,6 +142,7 @@ window.addEventListener('keydown', (e) => {
 let audioContext, analyser, freqData, beatDetector;
 let isCapturing = false;
 let smoothBass = 0, smoothMid = 0, smoothHigh = 0;
+let fovPunch = 0;
 
 const lerp = (start, end, factor) => start + (end - start) * factor;
 
@@ -176,7 +181,7 @@ async function initSystemAudio() {
     const source = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.8;
+    analyser.smoothingTimeConstant = 0.85;
     source.connect(analyser);
 
     freqData = new Uint8Array(analyser.frequencyBinCount);
@@ -238,8 +243,14 @@ function animate() {
   if (isCapturing && analyser) {
     analyser.getByteFrequencyData(freqData);
 
-    // Copy freqData to DataTexture buffer and set needsUpdate = true
-    u_audioTexture.image.data.set(freqData);
+    // Smooth per-bin FFT data before writing to DataTexture
+    const attack = 0.35;
+    const decay = 0.12;
+    for (let i = 0; i < 256; i++) {
+      const raw = freqData[i];
+      smoothAudioData[i] = lerp(smoothAudioData[i], raw, smoothAudioData[i] < raw ? attack : decay);
+      audioData[i] = Math.round(smoothAudioData[i]);
+    }
     u_audioTexture.needsUpdate = true;
 
     let bassSum = 0;
@@ -254,48 +265,50 @@ function animate() {
     for (let i = 80; i <= 180; i++) highSum += freqData[i];
     targetHigh = (highSum / 100) / 255;
 
-    // Check beat detection on onset hit
+    // Check beat detection on onset hit - gentle impulse punch
     if (beatDetector && beatDetector.checkBeat()) {
       if (chromaticAberrationPass && chromaticAberrationPass.uniforms && chromaticAberrationPass.uniforms.u_offset) {
-        chromaticAberrationPass.uniforms.u_offset.value = 0.018;
+        chromaticAberrationPass.uniforms.u_offset.value = 0.0045;
       }
-      camera.fov -= 6;
+      fovPunch = 2.2;
     }
   }
 
-  smoothBass = lerp(smoothBass, targetBass, smoothBass < targetBass ? 0.45 : 0.08);
-  smoothMid = lerp(smoothMid, targetMid, smoothMid < targetMid ? 0.3 : 0.08);
-  smoothHigh = lerp(smoothHigh, targetHigh, smoothHigh < targetHigh ? 0.5 : 0.1);
+  // Smooth audio bands with musical response
+  smoothBass = lerp(smoothBass, targetBass, smoothBass < targetBass ? 0.35 : 0.06);
+  smoothMid = lerp(smoothMid, targetMid, smoothMid < targetMid ? 0.25 : 0.06);
+  smoothHigh = lerp(smoothHigh, targetHigh, smoothHigh < targetHigh ? 0.3 : 0.08);
 
-  // Mesh pulses
-  const scale = 1 + (smoothBass * 0.45);
+  // Mesh pulses - controlled, pleasant breathing
+  const scale = 1 + (smoothBass * 0.28);
   outerMesh.scale.set(scale, scale, scale);
-  coreMesh.scale.set(1 + smoothBass * 0.7, 1 + smoothBass * 0.7, 1 + smoothBass * 0.7);
+  coreMesh.scale.set(1 + smoothBass * 0.45, 1 + smoothBass * 0.45, 1 + smoothBass * 0.45);
 
-  // Dynamic Bloom
-  bloomPass.strength = 1.0 + (smoothBass * 2.2);
+  // Dynamic Bloom - gentle and atmospheric
+  bloomPass.strength = 0.75 + (smoothBass * 0.9);
 
-  // Rotations
-  outerMesh.rotation.x += 0.003 + (smoothHigh * 0.04);
-  outerMesh.rotation.y += 0.005 + (smoothMid * 0.03);
-  coreMesh.rotation.y -= 0.006;
-  particles.rotation.y += 0.0005 + (smoothHigh * 0.004);
+  // Rotations - fluid, steady motion
+  outerMesh.rotation.x += 0.002 + (smoothHigh * 0.015);
+  outerMesh.rotation.y += 0.003 + (smoothMid * 0.012);
+  coreMesh.rotation.y -= 0.004;
+  particles.rotation.y += 0.0004 + (smoothHigh * 0.002);
 
   // Update outerMesh shader uniforms
   outerMaterial.uniforms.u_time.value = time;
   outerMaterial.uniforms.u_bass.value = smoothBass;
 
-  // Lerp chromatic aberration offset back toward 0.001
+  // Lerp chromatic aberration offset back toward rest value
   if (chromaticAberrationPass && chromaticAberrationPass.uniforms && chromaticAberrationPass.uniforms.u_offset) {
     chromaticAberrationPass.uniforms.u_offset.value = lerp(
       chromaticAberrationPass.uniforms.u_offset.value,
-      0.001,
+      0.0008,
       0.08
     );
   }
 
-  // Smooth camera.fov back to baseline
-  const baselineFov = 60 - (smoothBass * 7);
+  // Smooth camera.fov decay with impulse fovPunch
+  fovPunch = lerp(fovPunch, 0, 0.1);
+  const baselineFov = 60 - (smoothBass * 3.5) - fovPunch;
   camera.fov = lerp(camera.fov, baselineFov, 0.08);
   camera.position.x = Math.sin(time * 0.25) * 0.5;
   camera.position.y = Math.cos(time * 0.2) * 0.35;

@@ -1,7 +1,7 @@
 export const ChromaticAberrationShader = {
   uniforms: {
     tDiffuse: { value: null },
-    u_offset: { value: 0.001 },
+    u_offset: { value: 0.0008 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -31,11 +31,12 @@ export function setupPostProcessing(renderer, scene, camera) {
 
   const bloomPass = new THREE.UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    1.4, // strength
-    0.35, // radius
-    0.15  // threshold
+    0.85, // balanced base strength
+    0.4,  // soft radius
+    0.2   // threshold for cleaner highlights
   );
   composer.addPass(bloomPass);
+
 
   const chromaticAberrationPass = new THREE.ShaderPass(ChromaticAberrationShader);
   composer.addPass(chromaticAberrationPass);
