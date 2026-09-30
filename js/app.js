@@ -28,7 +28,7 @@ pointLight.position.set(0, 0, 5);
 scene.add(pointLight);
 
 const baseRadius = 2.4;
-const geometry = new THREE.IcosahedronGeometry(baseRadius, 5);
+const geometry = new THREE.IcosahedronGeometry(baseRadius, 4);
 
 // --- Audio DataTexture & ShaderMaterial ---
 const audioData = new Uint8Array(256);
@@ -74,9 +74,9 @@ const outerMaterial = new THREE.ShaderMaterial({
       float audioVal = texture2D(u_audioTexture, vec2(uv.x, 0.5)).r;
       vAudio = audioVal;
 
-      // Soft, organic harmonic wave
-      float wave = sin(position.x * 1.5 + u_time * 1.2) * cos(position.y * 1.5 + u_time * 0.9);
-      float displacement = (audioVal * 0.55) + (wave * 0.12 * (1.0 + u_bass * 1.2)) + (u_bass * 0.2);
+      // Liquid cosmic gravitational waves - slow, heavy, deep
+      float wave = sin(position.x * 1.0 + u_time * 0.6) * cos(position.y * 1.0 + u_time * 0.45);
+      float displacement = (audioVal * 0.4) + (wave * 0.08 * (1.0 + u_bass * 0.6)) + (u_bass * 0.12);
 
       vec3 displaced = position + normal * displacement;
       vElevation = (displaced.y / 2.4) * 0.5 + 0.5;
@@ -99,8 +99,8 @@ const outerMaterial = new THREE.ShaderMaterial({
       vec3 col = mix(u_colorBass, u_colorMid, smoothstep(0.15, 0.75, vElevation));
       col = mix(col, u_colorHigh, smoothstep(0.55, 0.95, vAudio));
 
-      // Audio-driven edge illumination
-      float brightness = 1.0 + (vAudio * 1.5) + (u_bass * 0.9);
+      // Gentle, atmospheric illumination
+      float brightness = 0.85 + (vAudio * 1.1) + (u_bass * 0.6);
       gl_FragColor = vec4(col * brightness, 1.0);
     }
   `,
@@ -109,10 +109,10 @@ const outerMaterial = new THREE.ShaderMaterial({
 const outerMesh = new THREE.Mesh(geometry, outerMaterial);
 scene.add(outerMesh);
 
-// --- Fresnel Energy Core Shader ---
-const coreGeo = new THREE.IcosahedronGeometry(1.2, 4);
+// --- Fresnel Singularity Core (Smooth, glowing celestial void orb) ---
+const coreGeo = new THREE.IcosahedronGeometry(1.22, 4);
 const coreMaterial = new THREE.ShaderMaterial({
-  wireframe: true,
+  wireframe: false,
   transparent: true,
   blending: THREE.AdditiveBlending,
   uniforms: {
@@ -133,8 +133,8 @@ const coreMaterial = new THREE.ShaderMaterial({
       vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
       vViewDir = normalize(-mvPos.xyz);
 
-      // Subtle core vibration
-      float pulse = sin(position.x * 3.0 + u_time * 2.0) * (0.04 + u_bass * 0.08);
+      // Heavy, slow gravitational pulse
+      float pulse = sin(position.x * 2.0 + u_time * 1.2) * (0.02 + u_bass * 0.04);
       vec3 displaced = position + normal * pulse;
 
       gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
@@ -149,13 +149,14 @@ const coreMaterial = new THREE.ShaderMaterial({
     varying vec3 vViewDir;
 
     void main() {
+      // Soft, celestial event-horizon rim glow
       float fresnel = clamp(1.0 - abs(dot(vNormal, vViewDir)), 0.0, 1.0);
-      fresnel = pow(fresnel, 2.5);
+      fresnel = pow(fresnel, 2.2);
 
-      vec3 coreGlow = mix(u_color * 0.7, u_fresnelColor * 1.6, fresnel);
-      float intensity = 0.75 + (u_bass * 0.8) + (u_mid * 0.4);
+      vec3 coreGlow = mix(u_color * 0.25, u_fresnelColor * 1.2, fresnel);
+      float intensity = 0.65 + (u_bass * 0.5) + (u_mid * 0.25);
 
-      gl_FragColor = vec4(coreGlow * intensity, 0.85);
+      gl_FragColor = vec4(coreGlow * intensity, fresnel * 0.85 + 0.08);
     }
   `,
 });
@@ -163,8 +164,20 @@ const coreMaterial = new THREE.ShaderMaterial({
 const coreMesh = new THREE.Mesh(coreGeo, coreMaterial);
 scene.add(coreMesh);
 
-// --- Audio-Reactive Particle Vortex ---
-const particleSystem = createParticleField(3000);
+// Delicate accretion orbit ring around the singularity
+const ringGeo = new THREE.TorusGeometry(1.48, 0.012, 16, 120);
+const ringMat = new THREE.MeshBasicMaterial({
+  color: 0x00ffff,
+  transparent: true,
+  opacity: 0.4,
+  blending: THREE.AdditiveBlending
+});
+const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+ringMesh.rotation.x = Math.PI * 0.38;
+scene.add(ringMesh);
+
+// --- Deep Space Celestial Field (800 clean stars) ---
+const particleSystem = createParticleField(800);
 scene.add(particleSystem.mesh);
 
 // --- Mood Palettes ---
@@ -229,6 +242,7 @@ function applyPalette(theme) {
 
   coreMaterial.uniforms.u_color.value.copy(theme.core);
   coreMaterial.uniforms.u_fresnelColor.value.copy(theme.coreFresnel);
+  ringMat.color.copy(theme.coreFresnel);
 
   particleSystem.material.color.setHex(theme.particleColor);
 
@@ -316,7 +330,7 @@ function ensureAudioContext() {
   if (!analyser) {
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.85;
+    analyser.smoothingTimeConstant = 0.90;
     freqData = new Uint8Array(analyser.frequencyBinCount);
     beatDetector = new BeatDetector(analyser);
   }
@@ -683,9 +697,9 @@ function animate() {
   if (isCapturing && analyser) {
     analyser.getByteFrequencyData(freqData);
 
-    // Apply sensitivity & smooth per-bin FFT data into DataTexture
-    const attack = 0.35;
-    const decay = 0.12;
+    // Apply sensitivity & smooth per-bin FFT data into DataTexture with gentle liquid attack/decay
+    const attack = 0.16;
+    const decay = 0.04;
     for (let i = 0; i < 256; i++) {
       const scaled = Math.min(255, freqData[i] * audioSensitivity);
       smoothAudioData[i] = lerp(smoothAudioData[i], scaled, smoothAudioData[i] < scaled ? attack : decay);
@@ -705,33 +719,35 @@ function animate() {
     for (let i = 80; i <= 180; i++) highSum += audioData[i];
     targetHigh = (highSum / 100) / 255;
 
-    // Check beat detection on onset hit - gentle impulse punch
+    // Subtle cosmic beat reaction - soft gravitational lensing
     if (beatDetector && beatDetector.checkBeat()) {
       if (chromaticAberrationPass && chromaticAberrationPass.uniforms && chromaticAberrationPass.uniforms.u_offset) {
-        chromaticAberrationPass.uniforms.u_offset.value = 0.0045;
+        chromaticAberrationPass.uniforms.u_offset.value = 0.0020;
       }
-      fovPunch = 2.2;
+      fovPunch = 0.4;
     }
   }
 
-  // Smooth audio bands with musical response
-  smoothBass = lerp(smoothBass, targetBass, smoothBass < targetBass ? 0.35 : 0.06);
-  smoothMid = lerp(smoothMid, targetMid, smoothMid < targetMid ? 0.25 : 0.06);
-  smoothHigh = lerp(smoothHigh, targetHigh, smoothHigh < targetHigh ? 0.3 : 0.08);
+  // Smooth audio bands with serene, heavy cosmic decay
+  smoothBass = lerp(smoothBass, targetBass, smoothBass < targetBass ? 0.16 : 0.035);
+  smoothMid = lerp(smoothMid, targetMid, smoothMid < targetMid ? 0.12 : 0.035);
+  smoothHigh = lerp(smoothHigh, targetHigh, smoothHigh < targetHigh ? 0.12 : 0.04);
 
-  // Mesh pulses - controlled, pleasant breathing
-  const scale = 1 + (smoothBass * 0.28);
+  // Mesh pulses - slow, majestic breathing
+  const scale = 1 + (smoothBass * 0.15);
   outerMesh.scale.set(scale, scale, scale);
-  coreMesh.scale.set(1 + smoothBass * 0.45, 1 + smoothBass * 0.45, 1 + smoothBass * 0.45);
+  coreMesh.scale.set(1 + smoothBass * 0.20, 1 + smoothBass * 0.20, 1 + smoothBass * 0.20);
+  ringMesh.scale.set(1 + smoothBass * 0.18, 1 + smoothBass * 0.18, 1 + smoothBass * 0.18);
 
-  // Dynamic Bloom - gentle and atmospheric
-  bloomPass.strength = 0.75 + (smoothBass * 0.9);
+  // Atmospheric, gentle bloom
+  bloomPass.strength = 0.65 + (smoothBass * 0.55);
 
-  // Rotations - fluid, steady motion
-  outerMesh.rotation.x += 0.002 + (smoothHigh * 0.015);
-  outerMesh.rotation.y += 0.003 + (smoothMid * 0.012);
-  coreMesh.rotation.y -= 0.004 + (smoothMid * 0.008);
-  coreMesh.rotation.x += 0.002;
+  // Rotations - slow, serene cosmic drift
+  outerMesh.rotation.x += 0.0006 + (smoothHigh * 0.004);
+  outerMesh.rotation.y += 0.0010 + (smoothMid * 0.003);
+  coreMesh.rotation.y -= 0.0012;
+  coreMesh.rotation.x += 0.0006;
+  ringMesh.rotation.z += 0.0015;
 
   // Audio-reactive particle vortex update
   updateParticles(particleSystem, smoothBass, smoothMid, smoothHigh, dt, fovPunch);
@@ -754,28 +770,28 @@ function animate() {
   if (chromaticAberrationPass && chromaticAberrationPass.uniforms && chromaticAberrationPass.uniforms.u_offset) {
     chromaticAberrationPass.uniforms.u_offset.value = lerp(
       chromaticAberrationPass.uniforms.u_offset.value,
-      0.0008,
-      0.08
+      0.0006,
+      0.05
     );
   }
 
-  // Camera Orbit Inertia & Cinematic Figure-8 Drift
-  azimuth = lerp(azimuth, targetAzimuth, 0.07);
-  polar = lerp(polar, targetPolar, 0.07);
-  distance = lerp(distance, targetDistance, 0.08);
+  // Camera Orbit Inertia & Serene Cinematic Drift
+  azimuth = lerp(azimuth, targetAzimuth, 0.05);
+  polar = lerp(polar, targetPolar, 0.05);
+  distance = lerp(distance, targetDistance, 0.06);
 
-  const driftAzimuth = azimuth + Math.sin(time * 0.2) * 0.05;
-  const driftPolar = polar + Math.cos(time * 0.15) * 0.035;
+  const driftAzimuth = azimuth + Math.sin(time * 0.15) * 0.04;
+  const driftPolar = polar + Math.cos(time * 0.1) * 0.025;
 
   camera.position.x = distance * Math.sin(driftPolar) * Math.sin(driftAzimuth);
   camera.position.y = distance * Math.cos(driftPolar);
   camera.position.z = distance * Math.sin(driftPolar) * Math.cos(driftAzimuth);
   camera.lookAt(0, 0, 0);
 
-  // Smooth camera.fov decay with impulse fovPunch
-  fovPunch = lerp(fovPunch, 0, 0.1);
-  const baselineFov = 60 - (smoothBass * 3.5) - fovPunch;
-  camera.fov = lerp(camera.fov, baselineFov, 0.08);
+  // Smooth camera.fov decay with gentle fovPunch
+  fovPunch = lerp(fovPunch, 0, 0.05);
+  const baselineFov = 60 - (smoothBass * 1.5) - fovPunch;
+  camera.fov = lerp(camera.fov, baselineFov, 0.05);
   camera.updateProjectionMatrix();
 
   composer.render();
