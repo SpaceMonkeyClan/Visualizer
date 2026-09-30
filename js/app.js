@@ -28,7 +28,7 @@ pointLight.position.set(0, 0, 5);
 scene.add(pointLight);
 
 const baseRadius = 2.4;
-const geometry = new THREE.IcosahedronGeometry(baseRadius, 4);
+const geometry = new THREE.IcosahedronGeometry(baseRadius, 5);
 
 // --- Audio DataTexture & ShaderMaterial ---
 const audioData = new Uint8Array(256);
@@ -109,10 +109,10 @@ const outerMaterial = new THREE.ShaderMaterial({
 const outerMesh = new THREE.Mesh(geometry, outerMaterial);
 scene.add(outerMesh);
 
-// --- Fresnel Singularity Core (Smooth, glowing celestial void orb) ---
-const coreGeo = new THREE.IcosahedronGeometry(1.22, 4);
+// --- Fresnel Energy Core Shader ---
+const coreGeo = new THREE.IcosahedronGeometry(1.2, 4);
 const coreMaterial = new THREE.ShaderMaterial({
-  wireframe: false,
+  wireframe: true,
   transparent: true,
   blending: THREE.AdditiveBlending,
   uniforms: {
@@ -133,8 +133,8 @@ const coreMaterial = new THREE.ShaderMaterial({
       vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
       vViewDir = normalize(-mvPos.xyz);
 
-      // Heavy, slow gravitational pulse
-      float pulse = sin(position.x * 2.0 + u_time * 1.2) * (0.02 + u_bass * 0.04);
+      // Subtle core vibration
+      float pulse = sin(position.x * 3.0 + u_time * 2.0) * (0.04 + u_bass * 0.08);
       vec3 displaced = position + normal * pulse;
 
       gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
@@ -149,32 +149,19 @@ const coreMaterial = new THREE.ShaderMaterial({
     varying vec3 vViewDir;
 
     void main() {
-      // Soft, celestial event-horizon rim glow
       float fresnel = clamp(1.0 - abs(dot(vNormal, vViewDir)), 0.0, 1.0);
-      fresnel = pow(fresnel, 2.2);
+      fresnel = pow(fresnel, 2.5);
 
-      vec3 coreGlow = mix(u_color * 0.25, u_fresnelColor * 1.2, fresnel);
-      float intensity = 0.65 + (u_bass * 0.5) + (u_mid * 0.25);
+      vec3 coreGlow = mix(u_color * 0.7, u_fresnelColor * 1.6, fresnel);
+      float intensity = 0.75 + (u_bass * 0.8) + (u_mid * 0.4);
 
-      gl_FragColor = vec4(coreGlow * intensity, fresnel * 0.85 + 0.08);
+      gl_FragColor = vec4(coreGlow * intensity, 0.85);
     }
   `,
 });
 
 const coreMesh = new THREE.Mesh(coreGeo, coreMaterial);
 scene.add(coreMesh);
-
-// Delicate accretion orbit ring around the singularity
-const ringGeo = new THREE.TorusGeometry(1.48, 0.012, 16, 120);
-const ringMat = new THREE.MeshBasicMaterial({
-  color: 0x00ffff,
-  transparent: true,
-  opacity: 0.4,
-  blending: THREE.AdditiveBlending
-});
-const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-ringMesh.rotation.x = Math.PI * 0.38;
-scene.add(ringMesh);
 
 // --- Deep Space Celestial Field (800 clean stars) ---
 const particleSystem = createParticleField(800);
@@ -242,7 +229,6 @@ function applyPalette(theme) {
 
   coreMaterial.uniforms.u_color.value.copy(theme.core);
   coreMaterial.uniforms.u_fresnelColor.value.copy(theme.coreFresnel);
-  ringMat.color.copy(theme.coreFresnel);
 
   particleSystem.material.color.setHex(theme.particleColor);
 
@@ -737,7 +723,6 @@ function animate() {
   const scale = 1 + (smoothBass * 0.15);
   outerMesh.scale.set(scale, scale, scale);
   coreMesh.scale.set(1 + smoothBass * 0.20, 1 + smoothBass * 0.20, 1 + smoothBass * 0.20);
-  ringMesh.scale.set(1 + smoothBass * 0.18, 1 + smoothBass * 0.18, 1 + smoothBass * 0.18);
 
   // Atmospheric, gentle bloom
   bloomPass.strength = 0.65 + (smoothBass * 0.55);
@@ -747,7 +732,6 @@ function animate() {
   outerMesh.rotation.y += 0.0010 + (smoothMid * 0.003);
   coreMesh.rotation.y -= 0.0012;
   coreMesh.rotation.x += 0.0006;
-  ringMesh.rotation.z += 0.0015;
 
   // Audio-reactive particle vortex update
   updateParticles(particleSystem, smoothBass, smoothMid, smoothHigh, dt, fovPunch);
