@@ -21,16 +21,57 @@
 
 <body>
     <div id="ui">
-        <div class="btn-row">
-            <button id="start-btn">Capture System Audio</button>
-            <button id="fullscreen-btn">Fullscreen (F)</button>
+        <div class="control-group">
+            <span class="group-title">Audio Source</span>
+            <div class="btn-row">
+                <button id="btn-source-system" class="btn active-source">System Audio</button>
+                <button id="btn-source-mic" class="btn">Microphone</button>
+                <button id="btn-source-demo" class="btn">Demo Synth</button>
+                <button id="btn-source-file" class="btn">Drop / File</button>
+                <input type="file" id="file-input" accept="audio/*" style="display:none;" />
+            </div>
         </div>
-        <div id="status" class="status">Status: Waiting for input</div>
-        <div class="preset-guide">Keys 1-4: Switch Color Presets</div>
+
+        <div id="playback-bar" class="playback-bar hidden">
+            <button id="btn-play-pause" class="btn-sm">⏸ Pause</button>
+            <span id="track-name" class="track-label">Ambient Demo Synth</span>
+        </div>
+
+        <div class="control-group">
+            <span class="group-title">Color Palette</span>
+            <div class="palette-pills">
+                <button class="pill-btn active" data-preset="1">Cyberpunk</button>
+                <button class="pill-btn" data-preset="2">Amber</button>
+                <button class="pill-btn" data-preset="3">Neon</button>
+                <button class="pill-btn" data-preset="4">Mono</button>
+            </div>
+        </div>
+
+        <div class="control-group slider-group">
+            <div class="slider-header">
+                <span class="group-title">Sensitivity</span>
+                <span id="sensitivity-val" class="slider-value">1.0x</span>
+            </div>
+            <input type="range" id="sensitivity-slider" min="0.5" max="2.5" step="0.1" value="1.0" />
+        </div>
+
+        <div class="btn-row footer-row">
+            <button id="fullscreen-btn" class="btn-secondary">Fullscreen (F)</button>
+            <div id="status" class="status">Status: Ready</div>
+        </div>
+        <div class="help-text">Drag & drop any audio file • Click & drag mouse to orbit • Scroll to zoom</div>
     </div>
+
+    <div id="dropzone" class="dropzone hidden">
+        <div class="dropzone-box">
+            <div class="drop-icon">🎵</div>
+            <div class="drop-text">Drop Audio File Here</div>
+            <div class="drop-sub">MP3, WAV, FLAC, OGG, M4A</div>
+        </div>
+    </div>
+
     <div id="canvas-container"></div>
 
     <script type="module" src="js/app.js"></script>
 </body>
-
 </html>
